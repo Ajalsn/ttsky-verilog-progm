@@ -1,0 +1,82 @@
+`timescale 1ns / 1ps
+
+module Multiplier_4bit(
+    input clk, rst, start,
+    input signed [3:0] M, Q_in,
+    output reg signed [7:0] product,
+    output reg done
+);
+
+    reg signed [3:0] A, Q;
+    reg Q_1;              
+    reg [2:0] count;      // 4 cycles (needs 3 bits)
+    reg [2:0] state;
+
+    // FSM states
+    parameter IDLE = 0, INIT = 1, CHECK = 2, ADD_SUB = 3,
+              SHIFT = 4, COUNT = 5, DONE = 6;
+
+    always @(posedge clk or posedge rst) begin
+        if (rst) begin
+            state <= IDLE;
+            done <= 0;
+            product <= 0;
+        end
+        else begin
+            case(state)
+
+            IDLE: begin
+                done <= 0;
+                if (start)
+                    state <= INIT;
+            end
+
+            INIT: begin
+                A <= 0;
+                Q <= Q_in;
+                Q_1 <= 0;
+                count <= 4;   // only 4 iterations
+                state <= CHECK;
+            end
+
+            CHECK: begin
+                case ({Q[0], Q_1})
+                    2'b01: state <= ADD_SUB; 
+                    2'b10: state <= ADD_SUB; 
+                    default: state <= SHIFT;
+                endcase
+            end
+
+            ADD_SUB: begin
+                if ({Q[0], Q_1} == 2'b01)
+                    A <= A + M;
+                else if ({Q[0], Q_1} == 2'b10)
+                    A <= A - M;
+                state <= SHIFT;
+            end
+
+            SHIFT: begin
+                // Arithmetic right shift {A,Q,Q_1}
+                {A, Q, Q_1} <= {A[3], A, Q};
+                state <= COUNT;
+            end
+
+            COUNT: begin
+                count <= count - 1;
+                if (count == 1)
+                    state <= DONE;
+                else
+                    state <= CHECK;
+            end
+
+            DONE: begin
+                product <= {A, Q}; // 8-bit result
+                done <= 1;
+                state <= IDLE;
+            end
+
+            endcase
+        end
+    end
+
+endmodule
